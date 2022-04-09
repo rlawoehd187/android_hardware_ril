@@ -150,3 +150,42 @@
     {RIL_REQUEST_STOP_LCE, dispatchVoid, responseLceStatus},
     {RIL_REQUEST_PULL_LCEDATA, dispatchVoid, responseLceData},
     {RIL_REQUEST_GET_ACTIVITY_INFO, dispatchVoid, responseActivityData},
+    {RIL_REQUEST_SIM_GET_ATR, dispatchInts, responseString},
+    {RIL_REQUEST_CAF_SIM_OPEN_CHANNEL_WITH_P2, dispatchOpenChannelWithP2, responseInts},
+
+/*******************************************************************************************/
+/*   PS1 Team additional Commands. */
+
+//#ifdef FEATURE_ALL_CP_CM_SYS_SELECTION_PREF
+     {RIL_REQUEST_SET_SYS_SELECTION_PREF_TYPE, dispatchInts, responseVoid},
+//#endif/* FEATURE_ALL_CP_CM_SYS_SELECTION_PREF */
+//#ifdef FEATURE_SKY_CP_SMS_CFG_SET_GW_DOMAIN
+     {RIL_REQUEST_WMS_CFG_SET_GW_DOMAIN_PREF, dispatchInts, responseVoid},
+//#endif/* FEATURE_SKY_CP_SMS_CFG_SET_GW_DOMAIN */
+//#ifdef FEATURE_ALL_CP_PHONE_OPERATION_MODE
+     {RIL_REQUEST_SET_PHONE_OPERATION_MODE, dispatchInts, responseVoid},
+//#endif/* FEATURE_ALL_CP_PHONE_OPERATION_MODE */
+//#ifdef FEATURE_SKT_KT_CP_USIM_ME_PERSONALIZATION
+     {RIL_REQUEST_SET_FEATURE_DATA, dispatchVoid, responseInts},
+     {RIL_REQUEST_CHANGE_DCK, dispatchStrings, responseInts},
+     {RIL_REQUEST_GET_PERSO_IND, dispatchVoid, responseInts},
+     {RIL_REQUEST_SET_PERSO_IND, dispatchStrings, responseInts},
+//#endif/* FEATURE_SKT_KT_CP_USIM_ME_PERSONALIZATION */   
+
+/* [End PS1] */
+/*******************************************************************************************/
+
+/*******************************************************************************************
+ PS2  Team additional Commands.
+********************************************************************************************/
+//#ifdef FEATURE_SKY_DS_QMI_DATA_PATH_SOL
+    {RIL_REQUEST_SET_SKY_DATA, dispatchInts, responseVoid},
+//#endif /*FEATURE_SKY_DS_QMI_DATA_PATH_SOL*/
+//#ifdef FEATURE_SKT_DS_SUPPORT_LTE_B2B
+    {RIL_REQUEST_MODIFY_3GPP_PROFILE, dispatchStrings, responseVoid},
+//#endif/* FEATURE_SKT_DS_SUPPORT_LTE_B2B */
+/********************************************************************************************/
+/* DS1 : FEATURE_QCRIL_PBM_SKY */
+    {RIL_REQUEST_PBM_IO, dispatchPBM_IO, responsePBM_IO},
+/* DS1 : FEATURE_QCRIL_PBM_SKY */
+/********************************************************************************************/

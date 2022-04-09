@@ -164,7 +164,8 @@ typedef enum {
     RADIO_TECH_HSPAP = 15, // HSPA+
     RADIO_TECH_GSM = 16, // Only supports voice
     RADIO_TECH_TD_SCDMA = 17,
-    RADIO_TECH_IWLAN = 18
+    RADIO_TECH_IWLAN = 18,
+    RADIO_TECH_LTE_CA = 19
 } RIL_RadioTechnology;
 
 typedef enum {
@@ -186,6 +187,7 @@ typedef enum {
     RAF_HSPAP = (1 << RADIO_TECH_HSPAP),
     RAF_GSM = (1 << RADIO_TECH_GSM),
     RAF_TD_SCDMA = (1 << RADIO_TECH_TD_SCDMA),
+    RAF_LTE_CA = (1 << RADIO_TECH_LTE_CA)
 } RIL_RadioAccessFamily;
 
 typedef enum {
@@ -238,7 +240,17 @@ typedef enum {
     PREF_NET_TYPE_LTE_GSM_WCDMA            = 9, /* LTE, GSM/WCDMA */
     PREF_NET_TYPE_LTE_CMDA_EVDO_GSM_WCDMA  = 10, /* LTE, CDMA, EvDo, GSM/WCDMA */
     PREF_NET_TYPE_LTE_ONLY                 = 11, /* LTE only */
-    PREF_NET_TYPE_LTE_WCDMA                = 12  /* LTE/WCDMA */
+    PREF_NET_TYPE_LTE_WCDMA                = 12,  /* LTE/WCDMA */
+    PREF_NET_TYPE_TD_SCDMA_ONLY            = 13, /* TD-SCDMA only */
+    PREF_NET_TYPE_TD_SCDMA_WCDMA           = 14, /* TD-SCDMA and WCDMA */
+    PREF_NET_TYPE_TD_SCDMA_LTE             = 15, /* TD-SCDMA and LTE */
+    PREF_NET_TYPE_TD_SCDMA_GSM             = 16, /* TD-SCDMA and GSM */
+    PREF_NET_TYPE_TD_SCDMA_GSM_LTE         = 17, /* TD-SCDMA,GSM and LTE */
+    PREF_NET_TYPE_TD_SCDMA_GSM_WCDMA       = 18, /* TD-SCDMA, GSM/WCDMA */
+    PREF_NET_TYPE_TD_SCDMA_WCDMA_LTE       = 19, /* TD-SCDMA, WCDMA and LTE */
+    PREF_NET_TYPE_TD_SCDMA_GSM_WCDMA_LTE   = 20, /* TD-SCDMA, GSM/WCDMA and LTE */
+    PREF_NET_TYPE_TD_SCDMA_GSM_WCDMA_CDMA_EVDO_AUTO  = 21, /* TD-SCDMA, GSM/WCDMA, CDMA and EvDo */
+    PREF_NET_TYPE_TD_SCDMA_LTE_CDMA_EVDO_GSM_WCDMA   = 22  /* TD-SCDMA, LTE, CDMA, EvDo GSM/WCDMA */
 } RIL_PreferredNetworkType;
 
 /* Source for cdma subscription */
@@ -302,6 +314,14 @@ typedef struct {
     int             numberPresentation; /* 0=Allowed, 1=Restricted, 2=Not Specified/Unknown 3=Payphone */
     char *          name;       /* Remote party name */
     int             namePresentation; /* 0=Allowed, 1=Restricted, 2=Not Specified/Unknown 3=Payphone */
+#ifdef FEATURE_SKT_CP_NUMBER_PLUS_SUPPORT
+    char *          number2nd;     /* Redirect party number (2nd number) */
+    int             numberPresentation2nd; /* 0=Allowed, 1=Restricted, 2=Not Specified/Unknown 3=Payphone */
+#endif /* FEATURE_SKT_CP_NUMBER_PLUS_SUPPORT */    
+
+#ifdef FEATURE_SKY_CP_SRVCC_SUPPORT
+    int             isSrvcc; /* SRVCC */
+#endif /* FEATURE_SKY_CP_SRVCC_SUPPORT */    
     RIL_UUS_Info *  uusInfo;    /* NULL or Pointer to User-User Signaling Information */
 } RIL_Call;
 
@@ -591,10 +611,53 @@ typedef struct {
 /* See RIL_REQUEST_LAST_CALL_FAIL_CAUSE */
 typedef enum {
     CALL_FAIL_UNOBTAINABLE_NUMBER = 1,
+    CALL_FAIL_NO_ROUTE_TO_DESTINATION = 3,
+    CALL_FAIL_CHANNEL_UNACCEPTABLE = 6,
+    CALL_FAIL_OPERATOR_DETERMINED_BARRING = 8,
     CALL_FAIL_NORMAL = 16,
     CALL_FAIL_BUSY = 17,
+    CALL_FAIL_NO_USER_RESPONDING = 18,
+    CALL_FAIL_NO_ANSWER_FROM_USER = 19,
+    CALL_FAIL_CALL_REJECTED = 21,
+    CALL_FAIL_NUMBER_CHANGED = 22,
+    CALL_FAIL_PREEMPTION = 25,
+    CALL_FAIL_DESTINATION_OUT_OF_ORDER = 27,
+    CALL_FAIL_INVALID_NUMBER_FORMAT = 28,
+    CALL_FAIL_FACILITY_REJECTED = 29,
+    CALL_FAIL_RESP_TO_STATUS_ENQUIRY = 30,
+    CALL_FAIL_NORMAL_UNSPECIFIED = 31,
     CALL_FAIL_CONGESTION = 34,
+    CALL_FAIL_NETWORK_OUT_OF_ORDER = 38,
+    CALL_FAIL_TEMPORARY_FAILURE = 41,
+    CALL_FAIL_SWITCHING_EQUIPMENT_CONGESTION = 42,
+    CALL_FAIL_ACCESS_INFORMATION_DISCARDED = 43,
+    CALL_FAIL_REQUESTED_CIRCUIT_OR_CHANNEL_NOT_AVAILABLE = 44,
+    CALL_FAIL_RESOURCES_UNAVAILABLE_OR_UNSPECIFIED = 47,
+    CALL_FAIL_QOS_UNAVAILABLE = 49,
+    CALL_FAIL_REQUESTED_FACILITY_NOT_SUBSCRIBED = 50,
+    CALL_FAIL_INCOMING_CALLS_BARRED_WITHIN_CUG = 55,
+    CALL_FAIL_BEARER_CAPABILITY_NOT_AUTHORIZED = 57,
+    CALL_FAIL_BEARER_CAPABILITY_UNAVAILABLE = 58,
+    CALL_FAIL_SERVICE_OPTION_NOT_AVAILABLE = 63,
+    CALL_FAIL_BEARER_SERVICE_NOT_IMPLEMENTED = 65,
     CALL_FAIL_ACM_LIMIT_EXCEEDED = 68,
+    CALL_FAIL_REQUESTED_FACILITY_NOT_IMPLEMENTED = 69,
+    CALL_FAIL_ONLY_DIGITAL_INFORMATION_BEARER_AVAILABLE = 70,
+    CALL_FAIL_SERVICE_OR_OPTION_NOT_IMPLEMENTED = 79,
+    CALL_FAIL_INVALID_TRANSACTION_IDENTIFIER = 81,
+    CALL_FAIL_USER_NOT_MEMBER_OF_CUG = 87,
+    CALL_FAIL_INCOMPATIBLE_DESTINATION = 88,
+    CALL_FAIL_INVALID_TRANSIT_NW_SELECTION = 91,
+    CALL_FAIL_SEMANTICALLY_INCORRECT_MESSAGE = 95,
+    CALL_FAIL_INVALID_MANDATORY_INFORMATION = 96,
+    CALL_FAIL_MESSAGE_TYPE_NON_IMPLEMENTED = 97,
+    CALL_FAIL_MESSAGE_TYPE_NOT_COMPATIBLE_WITH_PROTOCOL_STATE = 98,
+    CALL_FAIL_INFORMATION_ELEMENT_NON_EXISTENT = 99,
+    CALL_FAIL_CONDITIONAL_IE_ERROR = 100,
+    CALL_FAIL_MESSAGE_NOT_COMPATIBLE_WITH_PROTOCOL_STATE = 101,
+    CALL_FAIL_RECOVERY_ON_TIMER_EXPIRED = 102,
+    CALL_FAIL_PROTOCOL_ERROR_UNSPECIFIED = 111,
+    CALL_FAIL_INTERWORKING_UNSPECIFIED = 127,
     CALL_FAIL_CALL_BARRED = 240,
     CALL_FAIL_FDN_BLOCKED = 241,
     CALL_FAIL_IMSI_UNKNOWN_IN_VLR = 242,
@@ -625,6 +688,7 @@ typedef struct {
 typedef enum {
     PDP_FAIL_NONE = 0, /* No error, connection ok */
 
+    PDP_FAIL_ACTIVATION_NOT_ALLOWED  = 0x07,
     /* an integer cause code defined in TS 24.008
        section 6.1.3.1.3 or TS 24.301 Release 8+ Annex B.
        If the implementation does not have access to the exact cause codes,
@@ -770,6 +834,12 @@ typedef struct
   int              pin1_replaced;   /* applicable to USIM, CSIM & ISIM */
   RIL_PinState     pin1;
   RIL_PinState     pin2;
+#ifdef FEATURE_ALL_CP_USIM_PIN_RETRY_INIT
+  int              pin1_retry_count;
+  int              puk1_retry_count;
+  int              pin2_retry_count;
+  int              puk2_retry_count;
+#endif /* FEATURE_ALL_CP_USIM_PIN_RETRY_INIT */
 } RIL_AppStatus;
 
 /* Deprecated, use RIL_CardStatus_v6 */
@@ -865,6 +935,55 @@ typedef struct {
     int toCodeScheme;
     unsigned char selected;
 } RIL_GSM_BroadcastSmsConfigInfo;
+
+/* FEATURE_QCRIL_PBM_SKY [ */
+typedef enum {
+  RIL_PBM_SUCCESS,
+  RIL_PBM_EOF,
+  RIL_PBM_ERROR_PH_SIM_REQ,
+  RIL_PBM_ERROR_NO_SIM,
+  RIL_PBM_ERROR_SIM_PIN_REQ,
+  RIL_PBM_ERROR_SIM_PUC_REQ,
+  RIL_PBM_ERROR_SIM_FAIL,
+  RIL_PBM_ERROR_PIN2_REQ,
+  RIL_PBM_ERROR_PUC2_REQ,
+  RIL_PBM_ERROR_MEM_FULL,
+  RIL_PBM_ERROR_INDEX_INVALID,
+  RIL_PBM_ERROR_NOT_FOUND,
+  RIL_PBM_ERROR_TEXT_TOO_LONG,
+  RIL_PBM_ERROR_NUMBER_TOO_LONG,
+  RIL_PBM_ERROR_INVALID_CHAR,
+  RIL_PBM_ERROR_NOT_READY,
+  RIL_PBM_ERROR_SYNC,
+  RIL_PBM_ERROR,
+  RIL_PBM_ERROR_NOT_AVAILABLE,
+  RIL_PBM_ERROR_RESTRICTED,
+  RIL_PBM_ERROR_NOT_SUPPORTED,
+  RIL_PBM_ERROR_LOCKED,
+  RIL_PBM_ERROR_INVALID_REC,
+  RIL_PBM_ERROR_UNIQUE_IDS_CHANGED,
+  RIL_PBM_ERROR_CAT_NOT_SUPPORTED,
+  RIL_PBM_ERROR_INVALID_ENUM_FIELD,
+  RIL_PBM_ERROR_MAX
+} RIL_pbm_return_type;
+
+typedef struct {
+    int command;    /* one of the commands enum listed for USIM/PBM */
+    int rec_id;     /* record id */
+    int num_fields;  /* number of fields */
+    int eSubFunc;  /*sub function */ 
+
+    char *data;  /* user data */   
+    int data_size;  /* length of user data */
+} RIL_PBM_IO;
+
+typedef struct {
+    int rec_id;     /* record id */
+    int num_fields;  /* number of fields */
+    int num_recs;
+    char *pbmResponse;  /* In hex string format */
+} RIL_PBM_IO_Response;
+/* FEATURE_QCRIL_PBM_SKY ] */
 
 /* No restriction at all including voice/SMS/USSD/SS/AV64 and packet data. */
 #define RIL_RESTRICTED_STATE_NONE           0x00
@@ -1433,6 +1552,27 @@ typedef struct {
   /* period (in ms) for which Rx is active */
   uint32_t rx_mode_time_ms;
 } RIL_ActivityStatsInfo;
+
+typedef struct {
+    uint8_t p2; /* P2 parameter */
+    char * aidPtr; /* AID value, See ETSI 102.221 and 101.220*/
+
+} RIL_CafOpenChannelParams;
+
+#ifdef FEATURE_SKT_KT_CP_USIM_ME_PERSONALIZATION
+typedef struct {
+  char            *ck_data;
+  char            *perso_operation;
+  char            *perso_feature;
+} RIL_Perso_CkData;
+
+typedef struct {
+  char            *curr_dck;
+  char            *new_dck;
+  char            *perso_feature;
+} RIL_Perso_ChangeDck;
+#endif/* FEATURE_SKT_KT_CP_USIM_ME_PERSONALIZATION */
+
 
 /**
  * RIL_REQUEST_GET_SIM_STATUS
@@ -3960,7 +4100,7 @@ typedef struct {
  * RIL_REQUEST_VOICE_RADIO_TECH
  *
  * Query the radio technology type (3GPP/3GPP2) used for voice. Query is valid only
- * when radio state is RADIO_STATE_ON
+ * when radio state is not RADIO_STATE_UNAVAILABLE
  *
  * "data" is NULL
  * "response" is int *
@@ -4460,8 +4600,91 @@ typedef struct {
  */
 #define RIL_REQUEST_GET_ACTIVITY_INFO 135
 
-/***********************************************************************/
+/**
+ * RIL_REQUEST_SIM_GET_ATR
+ *
+ * Get the ATR from SIM Card
+ *
+ * Only valid when radio state is "RADIO_STATE_ON"
+ *
+ * "data" is const int *
+ * ((const int *)data)[0] contains the slot index on the SIM from which ATR is requested.
+ *
+ * "response" is a const char * containing the ATR, See ETSI 102.221 8.1 and ISO/IEC 7816 3
+ *
+ * Valid errors:
+ *
+ * SUCCESS
+ * RADIO_NOT_AVAILABLE (radio resetting)
+ * GENERIC_FAILURE
+ */
+#define RIL_REQUEST_SIM_GET_ATR 136
 
+/**
+ * RIL_REQUEST_CAF_SIM_OPEN_CHANNEL_WITH_P2
+ *
+ * Open a new logical channel and select the given application. This command
+ * reflects TS 27.007 "open logical channel" operation (+CCHO). This request
+ * also specifies the P2 parameter.
+ *
+ * "data" is a const RIL_CafOpenChannelParam *
+ *
+ * "response" is int *
+ * ((int *)data)[0] contains the session id of the logical channel.
+ * ((int *)data)[1] onwards may optionally contain the select response for the
+ *     open channel command with one byte per integer.
+ *
+ * Valid errors:
+ *  SUCCESS
+ *  RADIO_NOT_AVAILABLE
+ *  GENERIC_FAILURE
+ *  MISSING_RESOURCE
+ *  NO_SUCH_ELEMENT
+ */
+#define RIL_REQUEST_CAF_SIM_OPEN_CHANNEL_WITH_P2 137
+
+/*******************************************************************************************/
+/*   PS1 Team additional Commands. */
+
+/*   FEATURE_ALL_CP_CM_SYS_SELECTION_PREF */
+#define RIL_REQUEST_SET_SYS_SELECTION_PREF_TYPE 138
+
+/*   FEATURE_SKY_CP_SMS_CFG_SET_GW_DOMAIN */
+#define RIL_REQUEST_WMS_CFG_SET_GW_DOMAIN_PREF 139
+
+/*   FEATURE_ALL_CP_PHONE_OPERATION_MODE */
+#define RIL_REQUEST_SET_PHONE_OPERATION_MODE 140
+
+/*   FEATURE_SKT_KT_CP_USIM_ME_PERSONALIZATION */
+#define RIL_REQUEST_SET_FEATURE_DATA 141
+
+#define RIL_REQUEST_CHANGE_DCK 142
+
+#define RIL_REQUEST_GET_PERSO_IND 143
+
+#define RIL_REQUEST_SET_PERSO_IND 144
+
+/*******************************************************************************************/
+
+/*******************************************************************************************/
+/*--> PS2  Team additional Commands. */
+//sync the ril_commands.h
+// need to check command id 
+//#ifdef FEATURE_SKY_DS_QMI_DATA_PATH_SOL
+#define RIL_REQUEST_SET_SKY_DATA  145
+//#endif /* FEATURE_SKY_DS_QMI_DATA_PATH_SOL */
+
+//#ifef FEATURE_SKT_DS_SUPPORT_LTE_B2B            
+#define RIL_REQUEST_MODIFY_3GPP_PROFILE 146
+//#endif /*FEATURE_SKT_DS_SUPPORT_LTE_B2B*/
+
+/*<--- PS2 END*/
+/********************************************************************************************/
+
+//#define RIL_REQUEST_PBM_IO (RIL_REQUEST_QUALCOMM_MAX+10) /* FEATURE_QCRIL_PBM_SKY */
+#define RIL_REQUEST_PBM_IO 147 /* FEATURE_QCRIL_PBM_SKY */
+
+/***********************************************************************/
 
 #define RIL_UNSOL_RESPONSE_BASE 1000
 
@@ -5058,6 +5281,14 @@ typedef struct {
  *
  */
 #define RIL_UNSOL_LCEDATA_RECV 1045
+
+//#ifdef FEATURE_SKY_DS_QMI_DATA_PATH_UNSOL
+// need to check unsol command id later !
+#define RIL_UNSOL_SKY_DATA_EVENT_INFO 1046
+//#endif /* FEATURE_SKY_DS_QMI_DATA_PATH_UNSOL */
+
+#define RIL_UNSOL_PBM_SIM_INIT_DONE   1047	/* DS1 : FEATURE_QCRIL_PBM_SKY */
+#define RIL_UNSOL_PANTECH_MAX    RIL_UNSOL_PBM_SIM_INIT_DONE	/* modified by kangku(DS1) */
 
 /***********************************************************************/
 

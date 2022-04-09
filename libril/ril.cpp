@@ -109,7 +109,7 @@ namespace android {
 
     #define clearPrintBuf           printBuf[0] = 0
     #define removeLastChar          printBuf[strlen(printBuf)-1] = 0
-    #define appendPrintBuf(x...)    sprintf(printBuf, x)
+    #define appendPrintBuf(x...)    snprintf(printBuf, PRINTBUF_SIZE, x)
 #else
     #define startRequest
     #define closeRequest
@@ -271,6 +271,7 @@ static void dispatchUiccSubscripton(Parcel &p, RequestInfo *pRI);
 static void dispatchSimAuthentication(Parcel &p, RequestInfo *pRI);
 static void dispatchDataProfile(Parcel &p, RequestInfo *pRI);
 static void dispatchRadioCapability(Parcel &p, RequestInfo *pRI);
+static void dispatchOpenChannelWithP2(Parcel &p, RequestInfo *pRI);
 static int responseInts(Parcel &p, void *response, size_t responselen);
 static int responseFailCause(Parcel &p, void *response, size_t responselen);
 static int responseStrings(Parcel &p, void *response, size_t responselen);
@@ -309,6 +310,10 @@ static int decodeCdmaSubscriptionSource (RIL_RadioState radioState);
 static RIL_RadioState processRadioState(RIL_RadioState newRadioState);
 
 static bool isServiceTypeCfQuery(RIL_SsServiceType serType, RIL_SsRequestType reqType);
+/* FEATURE_QCRIL_PBM_SKY [ */
+static void dispatchPBM_IO (Parcel &p, RequestInfo *pRI);
+static int responsePBM_IO(Parcel &p, void *response, size_t responselen);
+/* FEATURE_QCRIL_PBM_SKY ] */
 
 #ifdef RIL_SHLIB
 #if defined(ANDROID_MULTI_SIM)
@@ -1521,6 +1526,7 @@ static void dispatchRilCdmaSmsWriteArgs(Parcel &p, RequestInfo *pRI) {
     uint8_t  uct;
     status_t status;
     int32_t  digitCount;
+    int32_t  digitLimit;
 
     memset(&rcsw, 0, sizeof(rcsw));
 
@@ -1551,7 +1557,9 @@ static void dispatchRilCdmaSmsWriteArgs(Parcel &p, RequestInfo *pRI) {
     status = p.read(&uct,sizeof(uct));
     rcsw.message.sAddress.number_of_digits = (uint8_t) uct;
 
-    for(digitCount = 0 ; digitCount < RIL_CDMA_SMS_ADDRESS_MAX; digitCount ++) {
+    digitLimit = MIN((rcsw.message.sAddress.number_of_digits), RIL_CDMA_SMS_ADDRESS_MAX);
+
+    for(digitCount = 0 ; digitCount < digitLimit; digitCount ++) {
         status = p.read(&uct,sizeof(uct));
         rcsw.message.sAddress.digits[digitCount] = (uint8_t) uct;
     }
@@ -1565,7 +1573,9 @@ static void dispatchRilCdmaSmsWriteArgs(Parcel &p, RequestInfo *pRI) {
     status = p.read(&uct,sizeof(uct));
     rcsw.message.sSubAddress.number_of_digits = (uint8_t) uct;
 
-    for(digitCount = 0 ; digitCount < RIL_CDMA_SMS_SUBADDRESS_MAX; digitCount ++) {
+    digitLimit = MIN((rcsw.message.sSubAddress.number_of_digits), RIL_CDMA_SMS_SUBADDRESS_MAX);
+
+    for(digitCount = 0 ; digitCount < digitLimit; digitCount ++) {
         status = p.read(&uct,sizeof(uct));
         rcsw.message.sSubAddress.digits[digitCount] = (uint8_t) uct;
     }
@@ -1573,7 +1583,9 @@ static void dispatchRilCdmaSmsWriteArgs(Parcel &p, RequestInfo *pRI) {
     status = p.readInt32(&t);
     rcsw.message.uBearerDataLen = (int) t;
 
-    for(digitCount = 0 ; digitCount < RIL_CDMA_SMS_BEARER_DATA_MAX; digitCount ++) {
+    digitLimit = MIN((rcsw.message.uBearerDataLen), RIL_CDMA_SMS_BEARER_DATA_MAX);
+
+    for(digitCount = 0 ; digitCount < digitLimit; digitCount ++) {
         status = p.read(&uct, sizeof(uct));
         rcsw.message.aBearerData[digitCount] = (uint8_t) uct;
     }
@@ -1643,12 +1655,12 @@ static void dispatchDataCall(Parcel& p, RequestInfo *pRI) {
 static void dispatchVoiceRadioTech(Parcel& p, RequestInfo *pRI) {
     RIL_RadioState state = CALL_ONSTATEREQUEST((RIL_SOCKET_ID)pRI->socket_id);
 
-    if ((RADIO_STATE_UNAVAILABLE == state) || (RADIO_STATE_OFF == state)) {
+    if (RADIO_STATE_UNAVAILABLE == state) {
         RIL_onRequestComplete(pRI, RIL_E_RADIO_NOT_AVAILABLE, NULL, 0);
     }
 
-    // RILs that support RADIO_STATE_ON should support this request.
-    if (RADIO_STATE_ON == state) {
+    // If radio is available then RIL should support this request.
+    if ((RADIO_STATE_ON == state) || (RADIO_STATE_OFF == state)){
         dispatchVoid(p, pRI);
         return;
     }
@@ -2043,6 +2055,57 @@ invalid:
     return;
 }
 
+/**
+ * Callee expects const RIL_CafOpenChannelParams *
+ * Payload is:
+ * byte p2
+ * char * aidPtr
+ */
+static void dispatchOpenChannelWithP2 (Parcel &p, RequestInfo *pRI) {
+    RIL_CafOpenChannelParams openChannel;
+    status_t status;
+    uint8_t p2;
+
+#if VDBG
+    RLOGD("dispatchOpenChannelWithP2");
+#endif
+    memset (&openChannel, 0, sizeof(RIL_CafOpenChannelParams));
+
+    status = p.read(&p2, sizeof(p2));
+    openChannel.p2 = (uint8_t) p2;
+
+    openChannel.aidPtr = strdupReadString(p);
+    if (status != NO_ERROR || openChannel.aidPtr == NULL) {
+        goto invalid;
+    }
+
+    startRequest;
+    appendPrintBuf("%s[p2:%d, aid:%s]", printBuf, openChannel.p2, openChannel.aidPtr);
+
+    closeRequest;
+    printRequest(pRI->token, pRI->pCI->requestNumber);
+
+    CALL_ONREQUEST(pRI->pCI->requestNumber,
+                &openChannel,
+                sizeof(openChannel),
+                pRI, pRI->socket_id);
+
+#ifdef MEMSET_FREED
+    memsetString(openChannel.aidPtr);
+#endif
+
+    free(openChannel.aidPtr);
+
+#ifdef MEMSET_FREED
+    memset(&openChannel, 0, sizeof(openChannel));
+#endif
+
+    return;
+invalid:
+    invalidCommandBlock(pRI);
+    return;
+}
+
 static int
 blockingWrite(int fd, const void *buffer, size_t len) {
     size_t writeOffset = 0;
@@ -2304,6 +2367,16 @@ static int responseCallList(Parcel &p, void *response, size_t responselen) {
         p.writeInt32(p_cur->numberPresentation);
         writeStringToParcel(p, p_cur->name);
         p.writeInt32(p_cur->namePresentation);
+
+#ifdef FEATURE_SKT_CP_NUMBER_PLUS_SUPPORT
+        writeStringToParcel(p, p_cur->number2nd);
+        p.writeInt32(p_cur->numberPresentation2nd);
+#endif /* FEATURE_SKT_CP_NUMBER_PLUS_SUPPORT */	
+
+#ifdef FEATURE_SKY_CP_SRVCC_SUPPORT
+        p.writeInt32(p_cur->isSrvcc);
+#endif /* FEATURE_SKY_CP_SRVCC_SUPPORT */	
+
         // Remove when partners upgrade to version 3
         if ((s_callbacks.version < 3) || (p_cur->uusInfo == NULL || p_cur->uusInfo->uusData == NULL)) {
             p.writeInt32(0); /* UUS Information is absent */
@@ -2333,6 +2406,20 @@ static int responseCallList(Parcel &p, void *response, size_t responselen) {
             p_cur->numberPresentation,
             p_cur->name,
             p_cur->namePresentation);
+
+#ifdef FEATURE_SKT_CP_NUMBER_PLUS_SUPPORT
+        appendPrintBuf("%s%s,cli2=%d]",
+            printBuf,
+            p_cur->number2nd,
+            p_cur->numberPresentation2nd);
+#endif /* FEATURE_SKT_CP_NUMBER_PLUS_SUPPORT */	
+
+#ifdef FEATURE_SKY_CP_SRVCC_SUPPORT
+        appendPrintBuf("%s,%s]",
+            printBuf,
+            (p_cur->isSrvcc)?"srvcc":"nonsrvcc");
+#endif /* FEATURE_SKY_CP_SRVCC_SUPPORT */	
+
     }
     removeLastChar;
     closeResponse;
@@ -2512,9 +2599,9 @@ static int responseDataCallList(Parcel &p, void *response, size_t responselen)
     if (s_callbacks.version < 5) {
         RLOGD("responseDataCallList: v4");
         return responseDataCallListV4(p, response, responselen);
-    } else if (responselen % sizeof(RIL_Data_Call_Response_v6) == 0) {
+    } else if (s_callbacks.version < 10) {
         return responseDataCallListV6(p, response, responselen);
-    } else if (responselen % sizeof(RIL_Data_Call_Response_v9) == 0) {
+    } else if (s_callbacks.version == 10) {
         return responseDataCallListV9(p, response, responselen);
     } else {
         if (response == NULL && responselen != 0) {
@@ -2765,8 +2852,21 @@ static int responseCdmaInformationRecords(Parcel &p,
         infoRec = &p_cur->infoRec[i];
         p.writeInt32(infoRec->name);
         switch (infoRec->name) {
-            case RIL_CDMA_DISPLAY_INFO_REC:
             case RIL_CDMA_EXTENDED_DISPLAY_INFO_REC:
+                if (infoRec->rec.display.alpha_len >
+                                         CDMA_ALPHA_INFO_BUFFER_LENGTH) {
+                    RLOGE("invalid display info response length %d \
+                          expected not more than %d\n",
+                         (int)infoRec->rec.display.alpha_len,
+                         CDMA_ALPHA_INFO_BUFFER_LENGTH);
+                    return RIL_ERRNO_INVALID_RESPONSE;
+                }
+                // Write as a byteArray
+                p.writeInt32(infoRec->rec.display.alpha_len);
+                p.write(infoRec->rec.display.alpha_buf,
+                        infoRec->rec.display.alpha_len);
+                break;
+            case RIL_CDMA_DISPLAY_INFO_REC:
                 if (infoRec->rec.display.alpha_len >
                                          CDMA_ALPHA_INFO_BUFFER_LENGTH) {
                     RLOGE("invalid display info response length %d \
@@ -3076,7 +3176,7 @@ static int responseSimRefresh(Parcel &p, void *response, size_t responselen) {
     }
 
     startResponse;
-    if (s_callbacks.version == 7) {
+    if (s_callbacks.version >= 7) {
         RIL_SimRefreshResponse_v7 *p_cur = ((RIL_SimRefreshResponse_v7 *) response);
         p.writeInt32(p_cur->result);
         p.writeInt32(p_cur->ef_id);
@@ -3444,6 +3544,32 @@ static void sendSimStatusAppInfo(Parcel &p, int num_apps, RIL_AppStatus appStatu
             p.writeInt32(appStatus[i].pin1_replaced);
             p.writeInt32(appStatus[i].pin1);
             p.writeInt32(appStatus[i].pin2);
+#ifdef FEATURE_ALL_CP_USIM_PIN_RETRY_INIT
+            p.writeInt32(appStatus[i].pin1_retry_count);
+            p.writeInt32(appStatus[i].puk1_retry_count);
+            p.writeInt32(appStatus[i].pin2_retry_count);
+            p.writeInt32(appStatus[i].puk2_retry_count);
+#endif /* FEATURE_ALL_CP_USIM_PIN_RETRY_INIT */
+
+#ifdef FEATURE_ALL_CP_USIM_PIN_RETRY_INIT
+            appendPrintBuf("%s[app_type=%d,app_state=%d,perso_substate=%d,\
+                    aid_ptr=%s,app_label_ptr=%s,pin1_replaced=%d,pin1=%d,pin2=%d\
+                    ,pin1_retry_count=%d, puk1_retry_count=%d,pin2_retry_count=%d, puk2_retry_count=%d],",
+                    printBuf,
+                    appStatus[i].app_type,
+                    appStatus[i].app_state,
+                    appStatus[i].perso_substate,
+                    appStatus[i].aid_ptr,
+                    appStatus[i].app_label_ptr,
+                    appStatus[i].pin1_replaced,
+                    appStatus[i].pin1,
+                    appStatus[i].pin2,
+                    appStatus[i].pin1_retry_count,
+                    appStatus[i].puk1_retry_count,
+                    appStatus[i].pin2_retry_count,
+                    appStatus[i].puk2_retry_count               
+                    );
+#else
             appendPrintBuf("%s[app_type=%d,app_state=%d,perso_substate=%d,\
                     aid_ptr=%s,app_label_ptr=%s,pin1_replaced=%d,pin1=%d,pin2=%d],",
                     printBuf,
@@ -3455,6 +3581,8 @@ static void sendSimStatusAppInfo(Parcel &p, int num_apps, RIL_AppStatus appStatu
                     appStatus[i].pin1_replaced,
                     appStatus[i].pin1,
                     appStatus[i].pin2);
+#endif /* FEATURE_ALL_CP_USIM_PIN_RETRY_INIT */
+
         }
         closeResponse;
 }
@@ -3705,6 +3833,99 @@ static int responseActivityData(Parcel &p, void *response, size_t responselen) {
 
   return 0;
 }
+
+/* FEATURE_QCRIL_PBM_SKY [ */
+/**
+ * Callee expects const RIL_SIM_IO *
+ * Payload is:
+ *   int32_t command
+ *   int32_t fileid
+ *   String path
+ *   int32_t p1, p2, p3
+ *   String data
+ *   String pin2
+ */
+static void
+dispatchPBM_IO (Parcel &p, RequestInfo *pRI) {
+    RIL_PBM_IO pbmIO;
+    int32_t t;
+    status_t status;
+    RIL_RadioState radioState = s_callbacks.onStateRequest();
+
+    memset (&pbmIO, 0, sizeof(pbmIO));
+
+    /* check RIL.java (public void ril_pbmIO) */
+    status = p.readInt32(&t);
+    pbmIO.command = (int)t;
+
+    status = p.readInt32(&t);
+    pbmIO.rec_id = (int)t;
+
+    status = p.readInt32(&t);
+    pbmIO.num_fields = (int)t;
+
+    status = p.readInt32(&t);
+    pbmIO.eSubFunc = (int)t;
+
+    status = p.readInt32(&t);
+    pbmIO.data_size = (int)t;
+
+    //pbmIO.data = strdupReadString(p);
+    pbmIO.data = (char *)(p.data() + p.dataPosition() + sizeof(int32_t));
+
+    startRequest;
+    appendPrintBuf("%s cmd=0x%X,rec_id=0x%X,%s,radioState=0x%X", printBuf,
+        pbmIO.command, pbmIO.rec_id, pbmIO.data, radioState);
+    closeRequest;
+    printRequest(pRI->token, pRI->pCI->requestNumber);
+
+    //check radioState
+    if (radioState !=RADIO_STATE_ON && radioState!=RADIO_STATE_OFF) {
+        goto invalid;
+    }
+
+    s_callbacks.onRequest(pRI->pCI->requestNumber, &pbmIO, sizeof(pbmIO), pRI);
+
+#ifdef MEMSET_FREED
+    memset(&pbmIO, 0, sizeof(pbmIO));
+#endif
+    return;
+
+invalid:
+    invalidCommandBlock(pRI);
+    return;
+}
+
+
+
+static int responsePBM_IO(Parcel &p, void *response, size_t responselen) {
+    if (response == NULL && responselen != 0) {
+        RLOGE("invalid response: NULL");
+        return RIL_ERRNO_INVALID_RESPONSE;
+    }
+	
+    if (responselen != sizeof (RIL_PBM_IO_Response) ) {
+        RLOGE("invalid response length was %d expected %d",
+                (int)responselen, (int)sizeof (RIL_PBM_IO_Response));
+        return RIL_ERRNO_INVALID_RESPONSE;
+    }
+
+    RIL_PBM_IO_Response *p_cur = (RIL_PBM_IO_Response *) response;
+
+    p.writeInt32(p_cur->rec_id);
+    p.writeInt32(p_cur->num_fields);
+    p.writeInt32(p_cur->num_recs);	
+    writeStringToParcel(p, p_cur->pbmResponse);
+
+    startResponse;
+    appendPrintBuf("%s rec_id=0x%X,num_fields=0x%X,%s", printBuf, p_cur->rec_id, p_cur->num_fields,
+        (char*)p_cur->pbmResponse);
+    closeResponse;
+
+
+    return 0;
+}
+/* FEATURE_QCRIL_PBM_SKY ] */
 
 /**
  * A write on the wakeup fd is done just to pop us out of select()
@@ -5096,6 +5317,7 @@ requestToString(int request) {
         case RIL_REQUEST_ACKNOWLEDGE_INCOMING_GSM_SMS_WITH_PDU: return "RIL_REQUEST_ACKNOWLEDGE_INCOMING_GSM_SMS_WITH_PDU";
         case RIL_REQUEST_STK_SEND_ENVELOPE_WITH_STATUS: return "RIL_REQUEST_STK_SEND_ENVELOPE_WITH_STATUS";
         case RIL_REQUEST_VOICE_RADIO_TECH: return "VOICE_RADIO_TECH";
+        case RIL_REQUEST_WRITE_SMS_TO_SIM: return "WRITE_SMS_TO_SIM";
         case RIL_REQUEST_GET_CELL_INFO_LIST: return"GET_CELL_INFO_LIST";
         case RIL_REQUEST_SET_UNSOL_CELL_INFO_LIST_RATE: return"SET_UNSOL_CELL_INFO_LIST_RATE";
         case RIL_REQUEST_SET_INITIAL_ATTACH_APN: return "RIL_REQUEST_SET_INITIAL_ATTACH_APN";
@@ -5103,10 +5325,12 @@ requestToString(int request) {
         case RIL_REQUEST_IMS_SEND_SMS: return "IMS_SEND_SMS";
         case RIL_REQUEST_SIM_TRANSMIT_APDU_BASIC: return "SIM_TRANSMIT_APDU_BASIC";
         case RIL_REQUEST_SIM_OPEN_CHANNEL: return "SIM_OPEN_CHANNEL";
+        case RIL_REQUEST_CAF_SIM_OPEN_CHANNEL_WITH_P2: return "CAF_SIM_OPEN_CHANNEL_WITH_P2";
         case RIL_REQUEST_SIM_CLOSE_CHANNEL: return "SIM_CLOSE_CHANNEL";
         case RIL_REQUEST_SIM_TRANSMIT_APDU_CHANNEL: return "SIM_TRANSMIT_APDU_CHANNEL";
         case RIL_REQUEST_GET_RADIO_CAPABILITY: return "RIL_REQUEST_GET_RADIO_CAPABILITY";
         case RIL_REQUEST_SET_RADIO_CAPABILITY: return "RIL_REQUEST_SET_RADIO_CAPABILITY";
+        case RIL_REQUEST_SIM_GET_ATR: return "SIM_GET_ATR";
         case RIL_REQUEST_SET_UICC_SUBSCRIPTION: return "SET_UICC_SUBSCRIPTION";
         case RIL_REQUEST_ALLOW_DATA: return "ALLOW_DATA";
         case RIL_REQUEST_GET_HARDWARE_CONFIG: return "GET_HARDWARE_CONFIG";
@@ -5124,6 +5348,7 @@ requestToString(int request) {
         case RIL_UNSOL_ON_USSD_REQUEST: return "UNSOL_ON_USSD_REQUEST(obsolete)";
         case RIL_UNSOL_NITZ_TIME_RECEIVED: return "UNSOL_NITZ_TIME_RECEIVED";
         case RIL_UNSOL_SIGNAL_STRENGTH: return "UNSOL_SIGNAL_STRENGTH";
+        case RIL_UNSOL_SUPP_SVC_NOTIFICATION: return "UNSOL_SUPP_SVC_NOTIFICATION";
         case RIL_UNSOL_STK_SESSION_END: return "UNSOL_STK_SESSION_END";
         case RIL_UNSOL_STK_PROACTIVE_COMMAND: return "UNSOL_STK_PROACTIVE_COMMAND";
         case RIL_UNSOL_STK_EVENT_NOTIFY: return "UNSOL_STK_EVENT_NOTIFY";
@@ -5157,6 +5382,40 @@ requestToString(int request) {
         case RIL_UNSOL_DC_RT_INFO_CHANGED: return "UNSOL_DC_RT_INFO_CHANGED";
         case RIL_REQUEST_SHUTDOWN: return "SHUTDOWN";
         case RIL_UNSOL_RADIO_CAPABILITY: return "RIL_UNSOL_RADIO_CAPABILITY";
+
+#ifdef FEATURE_ALL_CP_CM_SYS_SELECTION_PREF
+        case RIL_REQUEST_SET_SYS_SELECTION_PREF_TYPE: return "SET_SYS_SELECTION_PREF_TYPE";
+#endif/* FEATURE_ALL_CP_CM_SYS_SELECTION_PREF */
+
+#ifdef FEATURE_SKY_CP_SMS_CFG_SET_GW_DOMAIN
+        case RIL_REQUEST_WMS_CFG_SET_GW_DOMAIN_PREF: return "WMS_CFG_SET_GW_DOMAIN_PREF";
+#endif/* FEATURE_SKY_CP_SMS_CFG_SET_GW_DOMAIN */
+
+#ifdef FEATURE_ALL_CP_PHONE_OPERATION_MODE
+        case RIL_REQUEST_SET_PHONE_OPERATION_MODE: return "SET_PHONE_OPERATION_MODE";
+#endif/* FEATURE_ALL_CP_PHONE_OPERATION_MODE */
+
+#ifdef FEATURE_SKT_KT_CP_USIM_ME_PERSONALIZATION
+        case RIL_REQUEST_SET_FEATURE_DATA: return "SET_FEATURE_DATA";
+        case RIL_REQUEST_CHANGE_DCK: return "CHANGE_DCK";
+        case RIL_REQUEST_GET_PERSO_IND: return "GET_PERSO_IND";
+        case RIL_REQUEST_SET_PERSO_IND: return "SET_PERSO_IND";
+#endif/* FEATURE_SKT_KT_CP_USIM_ME_PERSONALIZATION */	
+
+
+// #ifdef FEATURE_SKT_DS_SUPPORT_LTE_B2B
+        case RIL_REQUEST_MODIFY_3GPP_PROFILE: return "RIL_REQUEST_MODIFY_3GPP_PROFILE";
+// #endif /* FEATURE_SKT_DS_SUPPORT_LTE_B2B*/         
+// #ifdef FEATURE_SKY_DS_QMI_DATA_PATH_SOL
+        case RIL_REQUEST_SET_SKY_DATA: return "RIL_REQUEST_SET_SKY_DATA";
+// #endif /*FEATURE_SKY_DS_QMI_DATA_PATH_SOL*/
+// #ifdef FEATURE_SKY_DS_QMI_DATA_PATH_UNSOL
+        case RIL_UNSOL_SKY_DATA_EVENT_INFO: return "RIL_UNSOL_SKY_DATA_EVENT_INFO";
+// #endif /*FEATURE_SKY_DS_QMI_DATA_PATH_UNSOL*/ 
+        /* FEATURE_QCRIL_PBM_SKY [ */
+        case RIL_REQUEST_PBM_IO: return "REQUEST_PBM_IO"; 
+        case RIL_UNSOL_PBM_SIM_INIT_DONE: return "UNSOL_PBM_SIM_INIT_DONE";
+        /* FEATURE_QCRIL_PBM_SKY ] */
         default: return "<unknown request>";
     }
 }
